@@ -1,5 +1,6 @@
 import streamlit as st
 import re
+import requests
 from pyproj import CRS, Transformer
 
 # --------------------------------------------------
@@ -10,123 +11,99 @@ st.set_page_config(
     layout="centered"
 )
 
-# --------------------------------------------------
-# CABEÇALHO
-# --------------------------------------------------
+st.title("Conversor de Coordenadas UTM para Geográficas")
 st.markdown(
-    """
-    <h2 style="text-align:center;">Conversor de Coordenadas UTM</h2>
-    <p style="text-align:center; color: gray;">
-        Conversão automática de UTM para Latitude e Longitude
-    </p>
-    <hr>
-    """,
-    unsafe_allow_html=True
+    "Conversão automática com identificação da cidade (OpenStreetMap)"
 )
+st.markdown("---")
 
 # --------------------------------------------------
-# LISTA DE CIDADES - MG
+# FUNÇÃO: IDENTIFICAR CIDADE VIA API OSM (GRÁTIS)
 # --------------------------------------------------
-cidades_mg = [
-    "Belo Horizonte", "Contagem", "Betim", "Ribeirao das Neves",
-    "Ibirite", "Santa Luzia", "Sete Lagoas", "Divinopolis",
-    "Uberlandia", "Uberaba", "Araguari", "Ituiutaba",
-    "Juiz de Fora", "Montes Claros", "Governador Valadares",
-    "Ipatinga", "Coronel Fabriciano", "Timoteo",
-    "Teofilo Otoni", "Varginha", "Pocos de Caldas",
-    "Pouso Alegre", "Lavras", "Passos", "Araxa",
-    "Patos de Minas", "Paracatu", "Unai",
-    "Nova Lima", "Sabara", "Ouro Preto",
-    "Conselheiro Lafaiete", "Barbacena",
-    "Muriae", "Cataguases"
-]
+def identificar_cidade(lat, lon):
+    url = "https://nominatim.openstreetmap.org/reverse"
+    params = {
+        "lat": lat,
+        "lon": lon,
+        "format": "json",
+        "addressdetails": 1
+    }
+    headers = {
+        "User-Agent": "ConversorUTM-CEMIG"
+    }
 
-cidade = st.selectbox(
-    "Cidade / Região",
-    options=cidades_mg,
-    index=None,
-    placeholder="Selecione a cidade"
-)
+    try:
+        resposta = requests.get(url, params=params, headers=headers, timeout=10)
+        data = resposta.json()
+        endereco = data.get("address", {})
+
+        return (
+            endereco.get("city")
+            or endereco.get("town")
+            or endereco.get("municipality")
+            or endereco.get("county")
+            or "Cidade não identificada"
+        )
+    except:
+        return "Erro ao identificar cidade"
 
 # --------------------------------------------------
-# ZONAS UTM POR CIDADE
+# DEFINIR ZONA UTM (MG: 22S ou 23S)
 # --------------------------------------------------
 zonas_utm = {
-    "Uberlandia": 22, "Uberaba": 22, "Araguari": 22,
-    "Ituiutaba": 22, "Paracatu": 22, "Unai": 22
+    "Triangulo": 22
 }
 
-def definir_zona(cidade):
-    return zonas_utm.get(cidade, 23)  # padrão MG
+def definir_zona(easting):
+    # Heurística simples: lado oeste de MG (Triângulo)
+    return 22 if easting < 500000 else 23
 
 # --------------------------------------------------
 # ENTRADA DE TEXTO
 # --------------------------------------------------
-st.markdown("### Texto com coordenadas UTM")
-
 texto = st.text_area(
-    "",
+    "Cole aqui o texto com coordenadas UTM",
     height=260,
     placeholder=(
-        "Cole aqui qualquer texto com coordenadas UTM.\n\n"
         "Exemplo:\n"
         "605323:7830023\n"
-        "Outro ponto em E=606404 N=7830875"
+        "606404 7830875"
     )
 )
-
-st.markdown("---")
 
 # --------------------------------------------------
 # BOTÃO
 # --------------------------------------------------
-converter = st.button("Converter Coordenadas")
+if st.button("Converter Coordenadas"):
 
-# --------------------------------------------------
-# PROCESSAMENTO E RESULTADOS
-# --------------------------------------------------
-if converter:
-
-    if not cidade or not texto.strip():
-        st.warning("Selecione a cidade e informe as coordenadas.")
+    if not texto.strip():
+        st.warning("Informe coordenadas UTM.")
     else:
-        zona = definir_zona(cidade)
-
-        crs_utm = CRS.from_proj4(
-            "+proj=utm +zone="
-            + str(zona)
-            + " +south +datum=WGS84 +units=m +no_defs"
-        )
-
-        crs_geo = CRS.from_epsg(4326)
-
-        transformer = Transformer.from_crs(
-            crs_utm, crs_geo, always_xy=True
-        )
+        st.markdown("### Resultados")
 
         coords = re.findall(r"(\d{5,6})\D+(\d{7})", texto)
 
-        st.markdown("### Resultados da Conversão")
-
         if not coords:
-            st.error("Nenhuma coordenada UTM válida encontrada.")
+            st.error("Nenhuma coordenada válida encontrada.")
         else:
             for e, n in coords:
+                zona = definir_zona(float(e))
+
+                crs_utm = CRS.from_proj4(
+                    "+proj=utm +zone="
+                    + str(zona)
+                    + " +south +datum=WGS84 +units=m +no_defs"
+                )
+                crs_geo = CRS.from_epsg(4326)
+
+                transformer = Transformer.from_crs(
+                    crs_utm, crs_geo, always_xy=True
+                )
+
                 lon, lat = transformer.transform(float(e), float(n))
 
-                st.markdown(
-                    f"""
-                    <div style="
-                        background-color:#e9f7ef;
-                        padding:10px;
-                        border-radius:6px;
-                        margin-bottom:8px;
-                        border-left: 5px solid #2ecc71;
-                    ">
-                        <b>{e}:{n}</b><br>
-                        Latitude: {lat:.6f}<br>
-                        Longitude: {lon:.6f}
-                    </div>
-                    """,
-                    unsafe_allow_html=True
+                cidade = identificar_cidade(lat, lon)
+
+                st.success(
+                    f"{e}:{n} → {lat:.6f}, {lon:.6f} ({cidade})"
                 )
