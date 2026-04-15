@@ -2,7 +2,9 @@ import streamlit as st
 import re
 from pyproj import CRS, Transformer
 
-# Configuração da página
+# --------------------------------------------------
+# CONFIGURAÇÃO DA PÁGINA
+# --------------------------------------------------
 st.set_page_config(
     page_title="Conversor de Coordenadas UTM",
     layout="centered"
@@ -11,25 +13,110 @@ st.set_page_config(
 st.title("Conversor de Coordenadas UTM para Geográficas")
 st.markdown("---")
 
-# Função para definir a zona UTM
+# --------------------------------------------------
+# LISTA DE CIDADES DE MÉDIO E GRANDE PORTE - MG
+# --------------------------------------------------
+cidades_mg = [
+    "Belo Horizonte",
+    "Contagem",
+    "Betim",
+    "Ribeirao das Neves",
+    "Ibirite",
+    "Santa Luzia",
+    "Sete Lagoas",
+    "Divinopolis",
+    "Uberlandia",
+    "Uberaba",
+    "Araguari",
+    "Ituiutaba",
+    "Juiz de Fora",
+    "Montes Claros",
+    "Governador Valadares",
+    "Ipatinga",
+    "Coronel Fabriciano",
+    "Timoteo",
+    "Teofilo Otoni",
+    "Varginha",
+    "Pocos de Caldas",
+    "Pouso Alegre",
+    "Lavras",
+    "Passos",
+    "Araxa",
+    "Patos de Minas",
+    "Paracatu",
+    "Unai",
+    "Nova Lima",
+    "Sabara",
+    "Ouro Preto",
+    "Conselheiro Lafaiete",
+    "Barbacena",
+    "Muriae",
+    "Cataguases"
+]
+
+cidade = st.selectbox(
+    "Cidade / Região",
+    options=cidades_mg,
+    index=None,
+    placeholder="Selecione a cidade"
+)
+
+# --------------------------------------------------
+# MAPA CIDADE -> ZONA UTM
+# --------------------------------------------------
+zonas_utm = {
+    # Triângulo Mineiro / Oeste / Noroeste (Zona 22S)
+    "Uberlandia": 22,
+    "Uberaba": 22,
+    "Araguari": 22,
+    "Ituiutaba": 22,
+    "Paracatu": 22,
+    "Unai": 22,
+
+    # Restante de MG (Zona 23S)
+    "Belo Horizonte": 23,
+    "Contagem": 23,
+    "Betim": 23,
+    "Ribeirao das Neves": 23,
+    "Ibirite": 23,
+    "Santa Luzia": 23,
+    "Sete Lagoas": 23,
+    "Divinopolis": 23,
+    "Juiz de Fora": 23,
+    "Montes Claros": 23,
+    "Governador Valadares": 23,
+    "Ipatinga": 23,
+    "Coronel Fabriciano": 23,
+    "Timoteo": 23,
+    "Teofilo Otoni": 23,
+    "Varginha": 23,
+    "Pocos de Caldas": 23,
+    "Pouso Alegre": 23,
+    "Lavras": 23,
+    "Passos": 23,
+    "Araxa": 23,
+    "Patos de Minas": 23,
+    "Nova Lima": 23,
+    "Sabara": 23,
+    "Ouro Preto": 23,
+    "Conselheiro Lafaiete": 23,
+    "Barbacena": 23,
+    "Muriae": 23,
+    "Cataguases": 23
+}
+
+# --------------------------------------------------
+# FUNÇÃO PARA DEFINIR A ZONA UTM
+# --------------------------------------------------
 def definir_zona(cidade):
-    cidade = cidade.lower()
+    return zonas_utm.get(cidade, 23)  # padrão MG
 
-    if "sete lagoas" in cidade:
-        return 23
-    if "belo horizonte" in cidade:
-        return 23
-    if "goiania" in cidade:
-        return 22
-
-    return 23  # padrão MG
-
-# Entrada de dados
-cidade = st.text_input("Cidade / Região")
-
+# --------------------------------------------------
+# ENTRADA DE TEXTO
+# --------------------------------------------------
 texto = st.text_area(
     "Cole aqui qualquer texto contendo coordenadas UTM",
-    height=250,
+    height=260,
     placeholder=(
         "Exemplo:\n"
         "Ponto em E=605323 N=7830023\n"
@@ -37,11 +124,13 @@ texto = st.text_area(
     )
 )
 
-# Botão
+# --------------------------------------------------
+# BOTÃO DE PROCESSAMENTO
+# --------------------------------------------------
 if st.button("Converter Coordenadas"):
 
     if not cidade or not texto.strip():
-        st.warning("Informe a cidade e as coordenadas.")
+        st.warning("Selecione a cidade e informe as coordenadas.")
     else:
         zona = definir_zona(cidade)
 
@@ -70,11 +159,5 @@ if st.button("Converter Coordenadas"):
                 lon, lat = transformer.transform(float(e), float(n))
 
                 st.success(
-                    str(e)
-                    + ":"
-                    + str(n)
-                    + " -> Latitude: "
-                    + format(lat, ".6f")
-                    + " | Longitude: "
-                    + format(lon, ".6f")
+                    f"{e}:{n} → Latitude {lat:.6f} | Longitude {lon:.6f}"
                 )
