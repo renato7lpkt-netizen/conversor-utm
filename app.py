@@ -1,9 +1,9 @@
 import streamlit as st
 import re
 import requests
-import folium
 from pyproj import CRS, Transformer
 from streamlit.components.v1 import html
+import json
 
 # ======================================
 # CONFIGURAÇÃO
@@ -14,23 +14,25 @@ st.set_page_config(
 )
 
 st.title("Conversor de Coordenadas UTM → Geográficas")
+st.markdown("Mapa único com todos os pontos (OpenStreetMap)")
 st.markdown("---")
 
 # ======================================
-# CIDADE (NOMINATIM)
+# IDENTIFICAR CIDADE (NOMINATIM)
 # ======================================
 def identificar_cidade(lat, lon):
-    url = "https://nominatim.openstreetmap.org/reverse"
-    params = {
-        "lat": lat,
-        "lon": lon,
-        "format": "json",
-        "addressdetails": 1
-    }
-    headers = {"User-Agent": "ConversorUTM-CEMIG"}
-
     try:
-        r = requests.get(url, params=params, headers=headers, timeout=10)
+        r = requests.get(
+            "https://nominatim.openstreetmap.org/reverse",
+            params={
+                "lat": lat,
+                "lon": lon,
+                "format": "json",
+                "addressdetails": 1
+            },
+            headers={"User-Agent": "ConversorUTM"},
+            timeout=10
+        )
         addr = r.json().get("address", {})
         return (
             addr.get("city")
@@ -84,28 +86,58 @@ if st.button("Converter Coordenadas"):
             lon, lat = transformer.transform(float(e), float(n))
             cidade = identificar_cidade(lat, lon)
 
-            pontos.append((e, n, lat, lon, cidade))
+            pontos.append({
+                "e": e,
+                "n": n,
+                "lat": lat,
+                "lon": lon,
+                "cidade": cidade
+            })
 
             st.success(
                 f"{e}:{n} → {lat:.6f}, {lon:.6f} ({cidade})"
             )
 
-        # ======================================
-        # MAPA ÚNICO
-        # ======================================
-        lat_c = sum(p[2] for p in pontos) / len(pontos)
-        lon_c = sum(p[3] for p in pontos) / len(pontos)
+        st.markdown("---")
+        st.markdown("### Mapa com todas as coordenadas")
 
-        mapa = folium.Map(
-            location=[lat_c, lon_c],
-            zoom_start=13,
-            tiles="OpenStreetMap"
-        )
+        # =============================
+        # MAPA ÚNICO (LEAFLET PURO)
+        # =============================
+        lat_c = sum(p["lat"] for p in pontos) / len(pontos)
+        lon_c = sum(p["lon"] for p in pontos) / len(pontos)
 
-        for e, n, lat, lon, cidade in pontos:
-            folium.Marker(
-                [lat, lon],
-                popup=f"{e}:{n}<br>{lat:.6f}, {lon:.6f}<br>{cidade}"
-            ).add_to(mapa)
+        pontos_js = json.dumps(pontos)
 
-        html(mapa._repr_html_(), height=520)
+        mapa_html = f"""
+        <div id="map" style="width:100%; height:500px;"></div>
+
+        <link
+          rel="stylesheet"
+          href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"
+        />
+        <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+
+        <script>
+          var map = L.map('map').setView([{lat_c}, {lon_c}], 13);
+
+          L.tileLayer('https://{{s}}.tile.openstreetmap.org/{{z}}/{{x}}/{{y}}.png', {{
+            maxZoom: 19,
+            attribution: '© OpenStreetMap'
+          }}).addTo(map);
+
+          var pontos = {pontos_js};
+
+          pontos.forEach(function(p) {{
+            L.marker([p.lat, p.lon]).addTo(map)
+              .bindPopup(
+                p.e + ":" + p.n + "<br>" +
+                p.lat.toFixed(6) + ", " + p.lon.toFixed(6) + "<br>" +
+                p.cidade
+              );
+          }});
+        </script>
+        """
+
+        html(mapa_html, height=520)
+``
