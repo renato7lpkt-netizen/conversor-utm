@@ -13,12 +13,12 @@ st.set_page_config(
     layout="centered"
 )
 
-st.title("Conversor de Coordenadas UTM para Geográficas")
-st.markdown("Conversão automática com cidade e mapa único (OpenStreetMap).")
+st.title("Conversor de Coordenadas UTM → Geográficas")
+st.markdown("Mapa único com todos os pontos e identificação automática da cidade.")
 st.markdown("---")
 
 # ======================================
-# IDENTIFICAR CIDADE (NOMINATIM - GRÁTIS)
+# IDENTIFICAR CIDADE (NOMINATIM)
 # ======================================
 def identificar_cidade(lat, lon):
     url = "https://nominatim.openstreetmap.org/reverse"
@@ -34,7 +34,6 @@ def identificar_cidade(lat, lon):
         r = requests.get(url, params=params, headers=headers, timeout=10)
         data = r.json()
         addr = data.get("address", {})
-
         return (
             addr.get("city")
             or addr.get("town")
@@ -46,7 +45,7 @@ def identificar_cidade(lat, lon):
         return "Erro ao identificar cidade"
 
 # ======================================
-# DEFINIR ZONA UTM (MG – 22S / 23S)
+# DEFINIR ZONA UTM (MG)
 # ======================================
 def definir_zona(easting):
     return 22 if float(easting) < 500000 else 23
@@ -57,12 +56,7 @@ def definir_zona(easting):
 texto = st.text_area(
     "Cole aqui qualquer texto contendo coordenadas UTM",
     height=260,
-    placeholder=(
-        "Exemplo:\n"
-        "605323:7830023\n"
-        "606404 7830875\n"
-        "Outro ponto 603586-7828102"
-    )
+    placeholder="Exemplo:\n605323:7830023\n606404 7830875"
 )
 
 # ======================================
@@ -76,11 +70,10 @@ if st.button("Converter Coordenadas"):
         coords = re.findall(r"(\d{5,6})\D+(\d{7})", texto)
 
         if not coords:
-            st.error("Nenhuma coordenada UTM válida encontrada.")
+            st.error("Nenhuma coordenada válida encontrada.")
         else:
             resultados = []
 
-            # Converter todas as coordenadas
             for e, n in coords:
                 zona = definir_zona(e)
 
@@ -106,7 +99,7 @@ if st.button("Converter Coordenadas"):
                     "cidade": cidade
                 })
 
-                # Resultado no formato solicitado
+                # Resultado textual
                 st.success(
                     f"{e}:{n} → {lat:.6f}, {lon:.6f} ({cidade})"
                 )
@@ -114,9 +107,7 @@ if st.button("Converter Coordenadas"):
             st.markdown("---")
             st.markdown("### Mapa com todas as coordenadas")
 
-            # ======================================
-            # CRIAR MAPA ÚNICO COM TODOS OS PONTOS
-            # ======================================
+            # ================= MAPA ÚNICO =================
             lat_media = sum(p["lat"] for p in resultados) / len(resultados)
             lon_media = sum(p["lon"] for p in resultados) / len(resultados)
 
@@ -127,11 +118,12 @@ if st.button("Converter Coordenadas"):
             )
 
             for p in resultados:
-                label = f'{p["e"]}:{p["n"]}'
+                rotulo = f'{p["e"]}:{p["n"]}'
                 folium.Marker(
                     location=[p["lat"], p["lon"]],
-                    popup=f'{label}<br>{p["cidade"]}',
+                    popup=f'{rotulo}<br>{p["cidade"]}',
                     tooltip=f'{p["lat"]:.6f}, {p["lon"]:.6f}'
                 ).add_to(mapa)
 
             st_folium(mapa, width=700, height=500)
+``
