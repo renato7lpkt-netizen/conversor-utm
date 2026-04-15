@@ -2,5 +2,4 @@ streamlit
 pyproj
 requests
 folium
-streamlit-folium
 ``
