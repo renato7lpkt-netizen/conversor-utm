@@ -10,48 +10,35 @@ st.set_page_config(
     layout="centered"
 )
 
-st.title("Conversor de Coordenadas UTM para Geográficas")
-st.markdown("---")
+# --------------------------------------------------
+# CABEÇALHO
+# --------------------------------------------------
+st.markdown(
+    """
+    <h2 style="text-align:center;">Conversor de Coordenadas UTM</h2>
+    <p style="text-align:center; color: gray;">
+        Conversão automática de UTM para Latitude e Longitude
+    </p>
+    <hr>
+    """,
+    unsafe_allow_html=True
+)
 
 # --------------------------------------------------
-# LISTA DE CIDADES DE MÉDIO E GRANDE PORTE - MG
+# LISTA DE CIDADES - MG
 # --------------------------------------------------
 cidades_mg = [
-    "Belo Horizonte",
-    "Contagem",
-    "Betim",
-    "Ribeirao das Neves",
-    "Ibirite",
-    "Santa Luzia",
-    "Sete Lagoas",
-    "Divinopolis",
-    "Uberlandia",
-    "Uberaba",
-    "Araguari",
-    "Ituiutaba",
-    "Juiz de Fora",
-    "Montes Claros",
-    "Governador Valadares",
-    "Ipatinga",
-    "Coronel Fabriciano",
-    "Timoteo",
-    "Teofilo Otoni",
-    "Varginha",
-    "Pocos de Caldas",
-    "Pouso Alegre",
-    "Lavras",
-    "Passos",
-    "Araxa",
-    "Patos de Minas",
-    "Paracatu",
-    "Unai",
-    "Nova Lima",
-    "Sabara",
-    "Ouro Preto",
-    "Conselheiro Lafaiete",
-    "Barbacena",
-    "Muriae",
-    "Cataguases"
+    "Belo Horizonte", "Contagem", "Betim", "Ribeirao das Neves",
+    "Ibirite", "Santa Luzia", "Sete Lagoas", "Divinopolis",
+    "Uberlandia", "Uberaba", "Araguari", "Ituiutaba",
+    "Juiz de Fora", "Montes Claros", "Governador Valadares",
+    "Ipatinga", "Coronel Fabriciano", "Timoteo",
+    "Teofilo Otoni", "Varginha", "Pocos de Caldas",
+    "Pouso Alegre", "Lavras", "Passos", "Araxa",
+    "Patos de Minas", "Paracatu", "Unai",
+    "Nova Lima", "Sabara", "Ouro Preto",
+    "Conselheiro Lafaiete", "Barbacena",
+    "Muriae", "Cataguases"
 ]
 
 cidade = st.selectbox(
@@ -62,72 +49,43 @@ cidade = st.selectbox(
 )
 
 # --------------------------------------------------
-# MAPA CIDADE -> ZONA UTM
+# ZONAS UTM POR CIDADE
 # --------------------------------------------------
 zonas_utm = {
-    # Triângulo Mineiro / Oeste / Noroeste (Zona 22S)
-    "Uberlandia": 22,
-    "Uberaba": 22,
-    "Araguari": 22,
-    "Ituiutaba": 22,
-    "Paracatu": 22,
-    "Unai": 22,
-
-    # Restante de MG (Zona 23S)
-    "Belo Horizonte": 23,
-    "Contagem": 23,
-    "Betim": 23,
-    "Ribeirao das Neves": 23,
-    "Ibirite": 23,
-    "Santa Luzia": 23,
-    "Sete Lagoas": 23,
-    "Divinopolis": 23,
-    "Juiz de Fora": 23,
-    "Montes Claros": 23,
-    "Governador Valadares": 23,
-    "Ipatinga": 23,
-    "Coronel Fabriciano": 23,
-    "Timoteo": 23,
-    "Teofilo Otoni": 23,
-    "Varginha": 23,
-    "Pocos de Caldas": 23,
-    "Pouso Alegre": 23,
-    "Lavras": 23,
-    "Passos": 23,
-    "Araxa": 23,
-    "Patos de Minas": 23,
-    "Nova Lima": 23,
-    "Sabara": 23,
-    "Ouro Preto": 23,
-    "Conselheiro Lafaiete": 23,
-    "Barbacena": 23,
-    "Muriae": 23,
-    "Cataguases": 23
+    "Uberlandia": 22, "Uberaba": 22, "Araguari": 22,
+    "Ituiutaba": 22, "Paracatu": 22, "Unai": 22
 }
 
-# --------------------------------------------------
-# FUNÇÃO PARA DEFINIR A ZONA UTM
-# --------------------------------------------------
 def definir_zona(cidade):
     return zonas_utm.get(cidade, 23)  # padrão MG
 
 # --------------------------------------------------
 # ENTRADA DE TEXTO
 # --------------------------------------------------
+st.markdown("### Texto com coordenadas UTM")
+
 texto = st.text_area(
-    "Cole aqui qualquer texto contendo coordenadas UTM",
+    "",
     height=260,
     placeholder=(
+        "Cole aqui qualquer texto com coordenadas UTM.\n\n"
         "Exemplo:\n"
-        "Ponto em E=605323 N=7830023\n"
-        "Outro ponto: 606404 7830875"
+        "605323:7830023\n"
+        "Outro ponto em E=606404 N=7830875"
     )
 )
 
+st.markdown("---")
+
 # --------------------------------------------------
-# BOTÃO DE PROCESSAMENTO
+# BOTÃO
 # --------------------------------------------------
-if st.button("Converter Coordenadas"):
+converter = st.button("Converter Coordenadas")
+
+# --------------------------------------------------
+# PROCESSAMENTO E RESULTADOS
+# --------------------------------------------------
+if converter:
 
     if not cidade or not texto.strip():
         st.warning("Selecione a cidade e informe as coordenadas.")
@@ -143,21 +101,32 @@ if st.button("Converter Coordenadas"):
         crs_geo = CRS.from_epsg(4326)
 
         transformer = Transformer.from_crs(
-            crs_utm,
-            crs_geo,
-            always_xy=True
+            crs_utm, crs_geo, always_xy=True
         )
 
         coords = re.findall(r"(\d{5,6})\D+(\d{7})", texto)
 
+        st.markdown("### Resultados da Conversão")
+
         if not coords:
             st.error("Nenhuma coordenada UTM válida encontrada.")
         else:
-            st.subheader("Resultados da Conversão")
-
             for e, n in coords:
                 lon, lat = transformer.transform(float(e), float(n))
 
-                st.success(
-                    f"{e}:{n} → Latitude {lat:.6f} | Longitude {lon:.6f}"
+                st.markdown(
+                    f"""
+                    <div style="
+                        background-color:#e9f7ef;
+                        padding:10px;
+                        border-radius:6px;
+                        margin-bottom:8px;
+                        border-left: 5px solid #2ecc71;
+                    ">
+                        <b>{e}:{n}</b><br>
+                        Latitude: {lat:.6f}<br>
+                        Longitude: {lon:.6f}
+                    </div>
+                    """,
+                    unsafe_allow_html=True
                 )
