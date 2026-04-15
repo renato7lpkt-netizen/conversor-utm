@@ -1,61 +1,41 @@
 import streamlit as st
 import re
-from pyproj import CRS, Transformer
+import requests
 
-# =====================================================
-# CONFIGURAÇÃO DA PÁGINA
-# =====================================================
 st.set_page_config(page_title="Conversor UTM", layout="centered")
 st.title("Conversor de Coordenadas UTM → Google Maps")
 st.markdown("---")
 
-# =====================================================
-# CIDADES PRÓXIMAS (REFERÊNCIA OPERACIONAL)
-# =====================================================
-cidades = [
-    "Belo Horizonte",
-    "Contagem",
-    "Betim",
-    "Sete Lagoas",
-    "Santa Luzia",
-    "Ribeirão das Neves",
-    "Nova Lima",
-    "Sabará",
-    "Ibirité",
-    "Lagoa Santa",
-    "Pedro Leopoldo",
-    "Vespasiano",
-    "Outra / Não listada"
-]
+# =================================================
+# CONVERSÃO UTM (SIRGAS 2000 / 23S) → LAT/LON
+# usando API pública do epsg.io (SEM pyproj)
+# =================================================
+def converter_epsg_31983_para_4326(e, n):
+    url = "https://epsg.io/trans"
+    params = {
+        "x": e,
+        "y": n,
+        "s_srs": 31983,  # SIRGAS 2000 / UTM 23S
+        "t_srs": 4326   # Latitude / Longitude
+    }
 
-cidade_selecionada = st.selectbox(
-    "Cidade próxima (referência)",
-    cidades
-)
+    r = requests.get(url, params=params, timeout=10)
+    data = r.json()
 
-# =====================================================
-# SISTEMA DE REFERÊNCIA CORRETO (MG)
-# SIRGAS 2000 / UTM Zona 23S
-# =====================================================
-crs_utm = CRS.from_epsg(31983)
-crs_geo = CRS.from_epsg(4326)
+    return float(data["y"]), float(data["x"])
 
-transformer = Transformer.from_crs(
-    crs_utm, crs_geo, always_xy=True
-)
-
-# =====================================================
+# =================================================
 # ENTRADA
-# =====================================================
+# =================================================
 texto = st.text_area(
     "Cole as coordenadas UTM (SIRGAS 2000 / Zona 23S)",
     height=220,
     placeholder="562033:7861719"
 )
 
-# =====================================================
+# =================================================
 # PROCESSAMENTO
-# =====================================================
+# =================================================
 if st.button("Converter"):
 
     pares = re.findall(r"(\d{5,6})\D+(\d{7})", texto)
@@ -69,7 +49,7 @@ if st.button("Converter"):
             e = float(e_str)
             n = float(n_str)
 
-            lon, lat = transformer.transform(e, n)
+            lat, lon = converter_epsg_31983_para_4326(e, n)
 
             resultado = (
                 f"{int(e)}:{int(n)} → "
@@ -78,6 +58,4 @@ if st.button("Converter"):
             )
 
             st.write(resultado)
-
-        st.markdown("---")
-        st.info(f"Cidade de referência selecionada: **{cidade_selecionada}**")
+``
