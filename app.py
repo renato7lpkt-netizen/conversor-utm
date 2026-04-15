@@ -1,8 +1,8 @@
 import streamlit as st
 import re
 import math
-import json
 import requests
+import json
 from streamlit.components.v1 import html
 
 st.set_page_config(page_title="Conversor UTM", layout="centered")
@@ -10,9 +10,9 @@ st.title("Conversor de Coordenadas UTM → Geográficas")
 st.markdown("---")
 
 # ===============================
-# UTM -> LAT/LON (WGS84)
+# UTM → LAT/LON (WGS84 CORRETO)
 # ===============================
-def utm_to_latlon(e, n, zone):
+def utm_to_latlon(e, n, zona):
     a = 6378137.0
     f = 1 / 298.257223563
     k0 = 0.9996
@@ -21,10 +21,10 @@ def utm_to_latlon(e, n, zone):
     x = e - 500000.0
     y = n - 10000000.0  # hemisfério sul
 
-    lon0 = math.radians((zone - 1) * 6 - 180 + 3)
+    lon0 = math.radians((zona - 1) * 6 - 180 + 3)
 
     m = y / k0
-    mu = m / (a * (1 - e2/4 - 3*e2**2/64))
+    mu = m / (a * (1 - e2 / 4 - 3 * e2 * e2 / 64))
 
     lat = mu
     lon = lon0 + x / (a * math.cos(lat) * k0)
@@ -32,7 +32,7 @@ def utm_to_latlon(e, n, zone):
     return math.degrees(lat), math.degrees(lon)
 
 # ===============================
-# CIDADE (OSM)
+# CIDADE (OSM NOMINATIM)
 # ===============================
 def cidade_osm(lat, lon):
     try:
@@ -56,6 +56,9 @@ texto = st.text_area(
     placeholder="605323:7830023\n606404 7830875"
 )
 
+# ===============================
+# PROCESSAMENTO
+# ===============================
 if st.button("Converter Coordenadas"):
     coords = re.findall(r"(\d{5,6})\D+(\d{7})", texto)
 
@@ -72,25 +75,48 @@ if st.button("Converter Coordenadas"):
             lat, lon = utm_to_latlon(e, n, zona)
             cidade = cidade_osm(lat, lon)
 
-            pontos.append({"e": int(e), "n": int(n), "lat": lat, "lon": lon, "cidade": cidade})
+            pontos.append({
+                "e": int(e),
+                "n": int(n),
+                "lat": lat,
+                "lon": lon,
+                "cidade": cidade
+            })
 
             st.success(f"{int(e)}:{int(n)} → {lat:.6f}, {lon:.6f} ({cidade})")
 
         lat_c = sum(p["lat"] for p in pontos) / len(pontos)
         lon_c = sum(p["lon"] for p in pontos) / len(pontos)
 
-        mapa = f"""
+        mapa_html = """
 <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"/>
-<div id="map" style="height:500px"></div>
+<div id="map" style="height:500px;width:100%;"></div>
 <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+
 <script>
-var map = L.map('map').setView([{lat_c}, {lon_c}], 13);
-L.tileLayer('https://{{s}}.tile.openstreetmap.org/{{z}}/{{x}}/{{y}}.png', {{ maxZoom: 19 }}).addTo(map);
-var pts = {json.dumps(pontos)};
-pts.forEach(p => {{
-  L.marker([p.lat, p.lon]).addTo(map)
-    .bindPopup(p.e + ":" + p.n + "<br>" + p.lat.toFixed(6) + ", " + p.lon.toFixed(6) + "<br>" + p.cidade);
-}});
+  var map = L.map('map').setView([{lat_c}, {lon_c}], 13);
+
+  L.tileLayer('https://tile.openstreetmap.org/{{z}}/{{x}}/{{y}}.png', {{
+    maxZoom: 19,
+    attribution: '&copy; OpenStreetMap'
+  }}).addTo(map);
+
+  var pontos = {pontos};
+
+  pontos.forEach(function(p) {{
+    L.marker([p.lat, p.lon]).addTo(map)
+      .bindPopup(
+        p.e + ":" + p.n + "<br>" +
+        p.lat.toFixed(6) + ", " + p.lon.toFixed(6) + "<br>" +
+        p.cidade
+      );
+  }});
 </script>
-"""
-        html(mapa, height=520)
+""".format(
+            lat_c=lat_c,
+            lon_c=lon_c,
+            pontos=json.dumps(pontos)
+        )
+
+        html(mapa_html, height=520)
+``
