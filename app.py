@@ -9,53 +9,105 @@ from streamlit.components.v1 import html
 # CONFIGURAÇÃO
 # ======================================
 st.set_page_config(page_title="Conversor UTM", layout="centered")
+
 st.title("Conversor de Coordenadas UTM → Geográficas")
 st.markdown("---")
 
 # ======================================
-# UTM → LAT/LON (PYTHON PURO)
+# UTM → LAT/LON (CORRETO – WGS84)
 # ======================================
-def utm_to_latlon(e, n, zona):
+def utm_to_latlon(easting, northing, zone, southern=True):
     a = 6378137.0
-    e2 = 0.00669438
+    f = 1 / 298.257223563
     k0 = 0.9996
+    e = math.sqrt(f * (2 - f))
+    e1sq = e**2 / (1 - e**2)
 
-    x = e - 500000
-    y = n - 10000000
-
-    lon0 = (zona - 1) * 6 - 180 + 3
-    lon0 = math.radians(lon0)
+    x = easting - 500000.0
+    y = northing
+    if southern:
+        y -= 10000000.0
 
     m = y / k0
-    mu = m / (a * (1 - e2/4 - 3*e2**2/64))
+    mu = m / (a * (1 - e**2 / 4 - 3 * e**4 / 64 - 5 * e**6 / 256))
 
-    lat1 = mu
-    lat = lat1
-    lon = lon0 + x / (a * math.cos(lat1) * k0)
+    e1 = (1 - math.sqrt(1 - e**2)) / (1 + math.sqrt(1 - e**2))
+
+    j1 = 3 * e1 / 2 - 27 * e1**3 / 32
+    j2 = 21 * e1**2 / 16 - 55 * e1**4 / 32
+    j3 = 151 * e1**3 / 96
+    j4 = 1097 * e1**4 / 512
+
+    fp = (
+        mu
+        + j1 * math.sin(2 * mu)
+        + j2 * math.sin(4 * mu)
+        + j3 * math.sin(6 * mu)
+        + j4 * math.sin(8 * mu)
+    )
+
+    sin_fp = math.sin(fp)
+    cos_fp = math.cos(fp)
+
+    c1 = e1sq * cos_fp**2
+    t1 = math.tan(fp)**2
+    r1 = a * (1 - e**2) / (1 - e**2 * sin_fp**2) ** 1.5
+    n1 = a / math.sqrt(1 - e**2 * sin_fp**2)
+    d = x / (n1 * k0)
+
+    lat = fp - (n1 * math.tan(fp) / r1) * (
+        d**2 / 2
+        - (5 + 3 * t1 + 10 * c1 - 4 * c1**2 - 9 * e1sq) * d**4 / 24
+    )
+
+    lon = (
+        d
+        - (1 + 2 * t1 + c1) * d**3 / 6
+    ) / cos_fp
+
+    lon0 = math.radians((zone - 1) * 6 - 180 + 3)
+    lon = lon0 + lon
 
     return math.degrees(lat), math.degrees(lon)
 
 # ======================================
-# CIDADE (NOMINATIM)
+# IDENTIFICAR CIDADE (NOMINATIM)
 # ======================================
-def cidade_osm(lat, lon):
+def identificar_cidade(lat, lon):
     try:
         r = requests.get(
             "https://nominatim.openstreetmap.org/reverse",
-            params={"lat": lat, "lon": lon, "format": "json"},
+            params={
+                "lat": lat,
+                "lon": lon,
+                "format": "json",
+                "addressdetails": 1
+            },
             headers={"User-Agent": "ConversorUTM"},
             timeout=10
         )
-        a = r.json().get("address", {})
-        return a.get("city") or a.get("town") or a.get("municipality") or "Cidade não identificada"
+        addr = r.json().get("address", {})
+        return (
+            addr.get("city")
+            or addr.get("town")
+            or addr.get("municipality")
+            or addr.get("county")
+            or "Cidade não identificada"
+        )
     except:
         return "Erro ao identificar cidade"
+
+# ======================================
+# ZONA UTM (MG)
+# ======================================
+def definir_zona(easting):
+    return 22 if easting < 500000 else 23
 
 # ======================================
 # ENTRADA
 # ======================================
 texto = st.text_area(
-    "Cole coordenadas UTM",
+    "Cole as coordenadas UTM",
     height=260,
     placeholder="605323:7830023\n606404 7830875"
 )
@@ -63,44 +115,63 @@ texto = st.text_area(
 # ======================================
 # PROCESSAMENTO
 # ======================================
-if st.button("Converter"):
+if st.button("Converter Coordenadas"):
     coords = re.findall(r"(\d{5,6})\D+(\d{7})", texto)
 
-    pontos = []
+    if not coords:
+        st.error("Nenhuma coordenada válida encontrada.")
+    else:
+        pontos = []
 
-    for e, n in coords:
-        e, n = float(e), float(n)
-        zona = 22 if e < 500000 else 23
-        lat, lon = utm_to_latlon(e, n, zona)
-        cidade = cidade_osm(lat, lon)
+        for e, n in coords:
+            e = float(e)
+            n = float(n)
+            zona = definir_zona(e)
 
-        pontos.append({
-            "e": e, "n": n,
-            "lat": lat, "lon": lon,
-            "cidade": cidade
-        })
+            lat, lon = utm_to_latlon(e, n, zona, southern=True)
+            cidade = identificar_cidade(lat, lon)
 
-        st.success(f"{int(e)}:{int(n)} → {lat:.6f}, {lon:.6f} ({cidade})")
+            pontos.append({
+                "e": int(e),
+                "n": int(n),
+                "lat": lat,
+                "lon": lon,
+                "cidade": cidade
+            })
 
-    if pontos:
+            st.success(f"{int(e)}:{int(n)} → {lat:.6f}, {lon:.6f} ({cidade})")
+
+        # ======================================
+        # MAPA ÚNICO – LEAFLET (HTML CORRETO)
+        # ======================================
         lat_c = sum(p["lat"] for p in pontos) / len(pontos)
         lon_c = sum(p["lon"] for p in pontos) / len(pontos)
 
-        mapa = f"""
-        <div id="map" style="height:500px"></div>
-        <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"/>
-        <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
-        <script>
-        var map = L.map('map').setView([{lat_c}, {lon_c}], 13);
-        L.tileLayer('https://{{s}}.tile.openstreetmap.org/{{z}}/{{x}}/{{y}}.png',
-          {{ maxZoom: 19 }}).addTo(map);
+        mapa_html = f"""
+        <link
+          rel="stylesheet"
+          href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"
+       /div>
+        <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js     <script>
+          var map = L.map('map').setView([{lat_c}, {lon_c}], 13);
 
-        var pontos = {json.dumps(pontos)};
-        pontos.forEach(p => {{
-          L.marker([p.lat, p.lon]).addTo(map)
-            .bindPopup(p.e + ":" + p.n + "<br>" + p.lat.toFixed(6) + ", " + p.lon.toFixed(6) + "<br>" + p.cidade);
-        }});
+          L.tileLayer('https://{{s}}.tile.openstreetmap.org/{{z}}/{{x}}/{{y}}.png', {{
+            maxZoom: 19,
+            attribution: '&copy; OpenStreetMap'
+          }}).addTo(map);
+
+          var pontos = {json.dumps(pontos)};
+
+          pontos.forEach(function(p) {{
+            L.marker([p.lat, p.lon]).addTo(map)
+              .bindPopup(
+                p.e + ":" + p.n + "<br>" +
+                p.lat.toFixed(6) + ", " + p.lon.toFixed(6) + "<br>" +
+                p.cidade
+              );
+          }});
         </script>
         """
-        html(mapa, height=520)
+
+        html(mapa_html, height=520)
 ``
