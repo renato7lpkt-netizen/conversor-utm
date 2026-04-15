@@ -3,23 +3,24 @@ import re
 import requests
 from pyproj import CRS, Transformer
 
-# --------------------------------------------------
+# ==================================================
 # CONFIGURAÇÃO DA PÁGINA
-# --------------------------------------------------
+# ==================================================
 st.set_page_config(
     page_title="Conversor de Coordenadas UTM",
     layout="centered"
 )
 
 st.title("Conversor de Coordenadas UTM para Geográficas")
-st.markdown(
-    "Conversão automática com identificação da cidade (OpenStreetMap)"
+st.write(
+    "Conversão automática de UTM para Latitude/Longitude "
+    "com identificação da cidade e visualização em mapa (OpenStreetMap)."
 )
 st.markdown("---")
 
-# --------------------------------------------------
-# FUNÇÃO: IDENTIFICAR CIDADE VIA API OSM (GRÁTIS)
-# --------------------------------------------------
+# ==================================================
+# FUNÇÃO: IDENTIFICAR CIDADE VIA OPENSTREETMAP (GRÁTIS)
+# ==================================================
 def identificar_cidade(lat, lon):
     url = "https://nominatim.openstreetmap.org/reverse"
     params = {
@@ -33,61 +34,58 @@ def identificar_cidade(lat, lon):
     }
 
     try:
-        resposta = requests.get(url, params=params, headers=headers, timeout=10)
-        data = resposta.json()
-        endereco = data.get("address", {})
+        r = requests.get(url, params=params, headers=headers, timeout=10)
+        data = r.json()
+        address = data.get("address", {})
 
         return (
-            endereco.get("city")
-            or endereco.get("town")
-            or endereco.get("municipality")
-            or endereco.get("county")
+            address.get("city")
+            or address.get("town")
+            or address.get("municipality")
+            or address.get("county")
             or "Cidade não identificada"
         )
     except:
         return "Erro ao identificar cidade"
 
-# --------------------------------------------------
-# DEFINIR ZONA UTM (MG: 22S ou 23S)
-# --------------------------------------------------
-zonas_utm = {
-    "Triangulo": 22
-}
-
+# ==================================================
+# DEFINIR ZONA UTM (MG – heurística segura)
+# MG usa basicamente 22S (Triângulo) e 23S
+# ==================================================
 def definir_zona(easting):
-    # Heurística simples: lado oeste de MG (Triângulo)
-    return 22 if easting < 500000 else 23
+    # Valores mais a oeste normalmente caem na zona 22
+    return 22 if float(easting) < 500000 else 23
 
-# --------------------------------------------------
+# ==================================================
 # ENTRADA DE TEXTO
-# --------------------------------------------------
+# ==================================================
 texto = st.text_area(
-    "Cole aqui o texto com coordenadas UTM",
+    "Cole aqui qualquer texto contendo coordenadas UTM",
     height=260,
     placeholder=(
         "Exemplo:\n"
         "605323:7830023\n"
-        "606404 7830875"
+        "Outro ponto próximo: 606404 7830875"
     )
 )
 
-# --------------------------------------------------
-# BOTÃO
-# --------------------------------------------------
+# ==================================================
+# PROCESSAMENTO
+# ==================================================
 if st.button("Converter Coordenadas"):
 
     if not texto.strip():
-        st.warning("Informe coordenadas UTM.")
+        st.warning("Informe ao menos uma coordenada UTM.")
     else:
-        st.markdown("### Resultados")
-
         coords = re.findall(r"(\d{5,6})\D+(\d{7})", texto)
 
         if not coords:
-            st.error("Nenhuma coordenada válida encontrada.")
+            st.error("Nenhuma coordenada UTM válida encontrada.")
         else:
+            st.markdown("### Resultados da Conversão")
+
             for e, n in coords:
-                zona = definir_zona(float(e))
+                zona = definir_zona(e)
 
                 crs_utm = CRS.from_proj4(
                     "+proj=utm +zone="
@@ -101,9 +99,38 @@ if st.button("Converter Coordenadas"):
                 )
 
                 lon, lat = transformer.transform(float(e), float(n))
-
                 cidade = identificar_cidade(lat, lon)
 
+                # Resultado no formato solicitado
                 st.success(
                     f"{e}:{n} → {lat:.6f}, {lon:.6f} ({cidade})"
                 )
+
+                # ==================================================
+                # MAPA OPENSTREETMAP (SEM API KEY)
+                # ==================================================
+                st.markdown(
+                    f"""
+                    <iframe
+                        width="100%"
+                        height="300"
+                        style="border:1px solid #ccc; border-radius:6px;"
+                        loading="lazy"
+                        src="https://www.openstreetmap.org/export/embed.html?
+                            bbox={lon-0.01}%2C{lat-0.01}%2C{lon+0.01}%2C{lat+0.01}
+                            &layer=mapnik
+                            &marker={lat}%2C{lon}">
+                    </iframe>
+                    <br>
+                    <small>
+                        <a href="https://www.openstreetmap.org/?mlat={lat}&mlon={lon}#map=16/{lat}/{lon}"
+                           target="_blank">
+                           Abrir no OpenStreetMap
+                        </a>
+                    </small>
+                    """,
+                    unsafe_allow_html=True
+                )
+
+                st.markdown("---")
+``
