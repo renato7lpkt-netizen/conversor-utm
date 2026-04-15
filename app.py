@@ -1,51 +1,32 @@
 import streamlit as st
 import re
 import math
-import requests
-import json
-from streamlit.components.v1 import html
 
 st.set_page_config(page_title="Conversor UTM", layout="centered")
-st.title("Conversor de Coordenadas UTM → Geográficas")
+st.title("Conversor de Coordenadas UTM → Latitude / Longitude")
 st.markdown("---")
 
 # ===============================
-# UTM → LAT/LON (WGS84 CORRETO)
+# UTM → LAT/LON (WGS84 – MG)
 # ===============================
-def utm_to_latlon(e, n, zona):
+def utm_to_latlon(easting, northing, zone):
     a = 6378137.0
     f = 1 / 298.257223563
     k0 = 0.9996
     e2 = f * (2 - f)
 
-    x = e - 500000.0
-    y = n - 10000000.0  # hemisfério sul
+    x = easting - 500000.0
+    y = northing - 10000000.0  # hemisfério sul
 
-    lon0 = math.radians((zona - 1) * 6 - 180 + 3)
+    lon0 = math.radians((zone - 1) * 6 - 180 + 3)
 
     m = y / k0
-    mu = m / (a * (1 - e2 / 4 - 3 * e2 * e2 / 64))
+    mu = m / (a * (1 - e2/4 - 3*e2*e2/64))
 
     lat = mu
     lon = lon0 + x / (a * math.cos(lat) * k0)
 
     return math.degrees(lat), math.degrees(lon)
-
-# ===============================
-# CIDADE (OSM NOMINATIM)
-# ===============================
-def cidade_osm(lat, lon):
-    try:
-        r = requests.get(
-            "https://nominatim.openstreetmap.org/reverse",
-            params={"lat": lat, "lon": lon, "format": "json"},
-            headers={"User-Agent": "ConversorUTM"},
-            timeout=10
-        )
-        a = r.json().get("address", {})
-        return a.get("city") or a.get("town") or a.get("municipality") or "Cidade não identificada"
-    except:
-        return "Cidade não identificada"
 
 # ===============================
 # ENTRADA
@@ -60,63 +41,29 @@ texto = st.text_area(
 # PROCESSAMENTO
 # ===============================
 if st.button("Converter Coordenadas"):
+
     coords = re.findall(r"(\d{5,6})\D+(\d{7})", texto)
 
     if not coords:
-        st.error("Nenhuma coordenada válida.")
+        st.error("Nenhuma coordenada válida encontrada.")
     else:
-        pontos = []
+        st.markdown("### Resultados")
 
         for e, n in coords:
             e = float(e)
             n = float(n)
+
+            # Minas Gerais: zona 22 ou 23
             zona = 22 if e < 500000 else 23
 
             lat, lon = utm_to_latlon(e, n, zona)
-            cidade = cidade_osm(lat, lon)
 
-            pontos.append({
-                "e": int(e),
-                "n": int(n),
-                "lat": lat,
-                "lon": lon,
-                "cidade": cidade
-            })
+            link_maps = (
+                f"https://www.google.com/maps?q={lat:.6f},{lon:.6f}"
+            )
 
-            st.success(f"{int(e)}:{int(n)} → {lat:.6f}, {lon:.6f} ({cidade})")
-
-        lat_c = sum(p["lat"] for p in pontos) / len(pontos)
-        lon_c = sum(p["lon"] for p in pontos) / len(pontos)
-
-        mapa_html = """
-<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"/>
-<div id="map" style="height:500px;width:100%;"></div>
-<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
-
-<script>
-  var map = L.map('map').setView([{lat_c}, {lon_c}], 13);
-
-  L.tileLayer('https://tile.openstreetmap.org/{{z}}/{{x}}/{{y}}.png', {{
-    maxZoom: 19,
-    attribution: '&copy; OpenStreetMap'
-  }}).addTo(map);
-
-  var pontos = {pontos};
-
-  pontos.forEach(function(p) {{
-    L.marker([p.lat, p.lon]).addTo(map)
-      .bindPopup(
-        p.e + ":" + p.n + "<br>" +
-        p.lat.toFixed(6) + ", " + p.lon.toFixed(6) + "<br>" +
-        p.cidade
-      );
-  }});
-</script>
-""".format(
-            lat_c=lat_c,
-            lon_c=lon_c,
-            pontos=json.dumps(pontos)
-        )
-
-        html(mapa_html, height=520)
+            st.write(
+                f"**{int(e)}:{int(n)} → {lat:.6f}, {lon:.6f}**  "
+                f"[Abrir no Google Maps]({link_maps})"
+            )
 ``
