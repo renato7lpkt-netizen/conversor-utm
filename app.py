@@ -18,7 +18,7 @@ st.markdown("Mapa único com todos os pontos e identificação automática da ci
 st.markdown("---")
 
 # ======================================
-# IDENTIFICAR CIDADE (NOMINATIM)
+# IDENTIFICAR CIDADE (OSM - NOMINATIM)
 # ======================================
 def identificar_cidade(lat, lon):
     url = "https://nominatim.openstreetmap.org/reverse"
@@ -119,3 +119,4 @@ if st.button("Converter Coordenadas"):
                 ).add_to(mapa)
 
             html(mapa._repr_html_(), height=500)
+``
