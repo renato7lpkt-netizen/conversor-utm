@@ -1,5 +1,5 @@
-streamlit
-pyproj
-requests
-folium
+streamlit==1.31.1
+pyproj==3.6.1
+requests==2.31.0
+folium==0.15.1
 ``
