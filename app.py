@@ -73,7 +73,7 @@ if st.button("🔁 Converter Coordenadas", use_container_width=True):
         )
 
         # Identifica automaticamente pares UTM no texto
-        coordenadas = re.findall(r"(\\d{5,6})\\D+(\\d{7})", texto)
+        coordenadas = re.findall(r"(\d{5,6})\D+(\d{7})", texto)
 
         if not coordenadas:
             st.error("Nenhuma coordenada UTM válida encontrada.")
