@@ -2,42 +2,60 @@ import streamlit as st
 import re
 from pyproj import CRS, Transformer
 
+# =====================================================
+# CONFIGURAÇÃO DA PÁGINA
+# =====================================================
 st.set_page_config(page_title="Conversor UTM", layout="centered")
 st.title("Conversor de Coordenadas UTM → Google Maps")
 st.markdown("---")
 
-# ===============================
-# PREPARO DOS SISTEMAS
-# ===============================
+# =====================================================
+# CIDADES PRÓXIMAS (REFERÊNCIA OPERACIONAL)
+# =====================================================
+cidades = [
+    "Belo Horizonte",
+    "Contagem",
+    "Betim",
+    "Sete Lagoas",
+    "Santa Luzia",
+    "Ribeirão das Neves",
+    "Nova Lima",
+    "Sabará",
+    "Ibirité",
+    "Lagoa Santa",
+    "Pedro Leopoldo",
+    "Vespasiano",
+    "Outra / Não listada"
+]
+
+cidade_selecionada = st.selectbox(
+    "Cidade próxima (referência)",
+    cidades
+)
+
+# =====================================================
+# SISTEMA DE REFERÊNCIA CORRETO (MG)
+# SIRGAS 2000 / UTM Zona 23S
+# =====================================================
+crs_utm = CRS.from_epsg(31983)
 crs_geo = CRS.from_epsg(4326)
 
-def converter_utm(e, n):
-    """
-    Converte UTM para Lat/Lon usando pyproj (preciso).
-    MG usa zona 22S ou 23S.
-    """
-    zona = 22 if e < 500000 else 23
-    crs_utm = CRS.from_proj4(
-        f"+proj=utm +zone={zona} +south +datum=WGS84 +units=m +no_defs"
-    )
-    transformer = Transformer.from_crs(
-        crs_utm, crs_geo, always_xy=True
-    )
-    lon, lat = transformer.transform(e, n)
-    return lat, lon
+transformer = Transformer.from_crs(
+    crs_utm, crs_geo, always_xy=True
+)
 
-# ===============================
+# =====================================================
 # ENTRADA
-# ===============================
+# =====================================================
 texto = st.text_area(
-    "Cole as coordenadas UTM",
+    "Cole as coordenadas UTM (SIRGAS 2000 / Zona 23S)",
     height=220,
     placeholder="562033:7861719"
 )
 
-# ===============================
+# =====================================================
 # PROCESSAMENTO
-# ===============================
+# =====================================================
 if st.button("Converter"):
 
     pares = re.findall(r"(\d{5,6})\D+(\d{7})", texto)
@@ -51,7 +69,7 @@ if st.button("Converter"):
             e = float(e_str)
             n = float(n_str)
 
-            lat, lon = converter_utm(e, n)
+            lon, lat = transformer.transform(e, n)
 
             resultado = (
                 f"{int(e)}:{int(n)} → "
@@ -60,3 +78,6 @@ if st.button("Converter"):
             )
 
             st.write(resultado)
+
+        st.markdown("---")
+        st.info(f"Cidade de referência selecionada: **{cidade_selecionada}**")
