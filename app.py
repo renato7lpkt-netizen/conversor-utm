@@ -2,8 +2,8 @@ import streamlit as st
 import re
 import requests
 import folium
-from streamlit_folium import st_folium
 from pyproj import CRS, Transformer
+from streamlit.components.v1 import html
 
 # ======================================
 # CONFIGURAÇÃO DA PÁGINA
@@ -72,7 +72,7 @@ if st.button("Converter Coordenadas"):
         if not coords:
             st.error("Nenhuma coordenada válida encontrada.")
         else:
-            resultados = []
+            pontos = []
 
             for e, n in coords:
                 zona = definir_zona(e)
@@ -91,15 +91,8 @@ if st.button("Converter Coordenadas"):
                 lon, lat = transformer.transform(float(e), float(n))
                 cidade = identificar_cidade(lat, lon)
 
-                resultados.append({
-                    "e": e,
-                    "n": n,
-                    "lat": lat,
-                    "lon": lon,
-                    "cidade": cidade
-                })
+                pontos.append((e, n, lat, lon, cidade))
 
-                # Resultado textual
                 st.success(
                     f"{e}:{n} → {lat:.6f}, {lon:.6f} ({cidade})"
                 )
@@ -107,9 +100,11 @@ if st.button("Converter Coordenadas"):
             st.markdown("---")
             st.markdown("### Mapa com todas as coordenadas")
 
-            # ================= MAPA ÚNICO =================
-            lat_media = sum(p["lat"] for p in resultados) / len(resultados)
-            lon_media = sum(p["lon"] for p in resultados) / len(resultados)
+            # ======================================
+            # MAPA ÚNICO COM TODOS OS PONTOS
+            # ======================================
+            lat_media = sum(p[2] for p in pontos) / len(pontos)
+            lon_media = sum(p[3] for p in pontos) / len(pontos)
 
             mapa = folium.Map(
                 location=[lat_media, lon_media],
@@ -117,13 +112,10 @@ if st.button("Converter Coordenadas"):
                 tiles="OpenStreetMap"
             )
 
-            for p in resultados:
-                rotulo = f'{p["e"]}:{p["n"]}'
+            for e, n, lat, lon, cidade in pontos:
                 folium.Marker(
-                    location=[p["lat"], p["lon"]],
-                    popup=f'{rotulo}<br>{p["cidade"]}',
-                    tooltip=f'{p["lat"]:.6f}, {p["lon"]:.6f}'
+                    location=[lat, lon],
+                    popup=f"{e}:{n}<br>{lat:.6f}, {lon:.6f}<br>{cidade}"
                 ).add_to(mapa)
 
-            st_folium(mapa, width=700, height=500)
-``
+            html(mapa._repr_html_(), height=500)
